@@ -1,1 +1,3 @@
 .venv/
+.Ds_Store
+__pycache__/
