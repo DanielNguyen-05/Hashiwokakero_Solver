@@ -1,3 +1,4 @@
 pysat
 numpy
 python-sat[pblib,aiger]
+psutil 
