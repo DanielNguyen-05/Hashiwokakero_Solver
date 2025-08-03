@@ -1,4 +1,4 @@
-from helper import load_input, upload_output
+from file_solver import load_input, upload_output
 from hashiwokakero_solver import HashiwokakeroSolver
 from island_map import IslandMap
 from cnf_generator import CNFGenerator
