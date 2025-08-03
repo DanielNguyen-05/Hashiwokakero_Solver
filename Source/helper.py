@@ -2,7 +2,7 @@ import os
 
 # Load grid from file txt
 def load_input(filename):
-    filepath = os.path.join("Inputs", filename)
+    filepath = os.path.join("Source/Inputs", filename)
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"File not found: {filepath}")
     with open(filepath, 'r') as f:
@@ -10,7 +10,7 @@ def load_input(filename):
 
 # Upload the result to file txt  
 def upload_output(grid, filename, method):
-    output_dir = os.path.join("Outputs", method)
+    output_dir = os.path.join("Source/Outputs", method)
     os.makedirs(output_dir, exist_ok=True)
     full_path = os.path.join(output_dir, filename)
 
