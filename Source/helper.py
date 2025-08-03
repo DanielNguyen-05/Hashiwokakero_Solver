@@ -18,3 +18,4 @@ def upload_output(grid, filename, method):
         for row in grid:
             line = '[ ' + ' , '.join(f'"{cell}"' for cell in row) + ' ]'
             f.write(line + '\n')
+

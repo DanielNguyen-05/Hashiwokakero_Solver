@@ -29,6 +29,7 @@ class CNFGenerator:
         else:
             return (min(r1a, r1b) < r2a < max(r1a, r1b)) and (min(c2a, c2b) < c1a < max(c2a, c2b))
 
+    # Encode sum constraint
     def encode_sum(self, literals, weights, target_sum):
         def new_auxiliary_var():
             return self._next_var()
@@ -83,16 +84,19 @@ class CNFGenerator:
         clauses.append([sum_vars[n][target_sum]])
         return clauses
 
+    # Generate CNF 
     def generate(self):
         cnf = CNF()
         conn_vars = {}
 
+        # Condition 1: Between two islands only 0 bridge or 1 bridge or 2 bridges can be built
         for i, conn in enumerate(self.connections):
             v1 = self._get_var(f"conn_{i}_1")
             v2 = self._get_var(f"conn_{i}_2")
             conn_vars[i] = (v1, v2)
             cnf.append([-v1, -v2])
 
+        # Condition 2: Degree Constraint
         for pos, degree in self.islands:
             lits = []
             weights = []
@@ -105,21 +109,11 @@ class CNFGenerator:
                 clauses = self.encode_sum(lits, weights, degree)
                 cnf.extend(clauses)
 
+        # Condition 3: Bridges Crossed Constraint
         for i in range(len(self.connections)):
             for j in range(i + 1, len(self.connections)):
                 if self._bridges_cross(self.connections[i], self.connections[j]):
                     for x in conn_vars[i]:
                         for y in conn_vars[j]:
                             cnf.append([-x, -y])
-                            
-        unique_clauses = []
-        seen = set()
-        for clause in cnf.clauses:
-            key = tuple(sorted(clause))
-            if key not in seen:
-                seen.add(key)
-                unique_clauses.append(clause)
-        cnf.clauses = unique_clauses
-        cnf.to_file("hashiwokakero.cnf")
-
         return cnf, conn_vars
