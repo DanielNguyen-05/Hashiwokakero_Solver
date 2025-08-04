@@ -220,211 +220,159 @@ class HashiwokakeroSolver:
 
     @_track_memory
     def solve_with_AStar(self):
-        """
-        Solve Hashiwokakero puzzle using A* search algorithm with improved heuristics.
-        """
         start = time.time()
-        timeout = 10
+        timeout = 2
         
-        def calculate_improved_heuristic(assignment):
-            """
-            More sophisticated admissible heuristic combining multiple factors.
-            """
-            current_degrees = defaultdict(int)
-            unassigned_connections = 0
-            
-            for i, count in enumerate(assignment):
-                if count == -1:
-                    unassigned_connections += 1
-                elif count > 0:
-                    p1, p2 = self.map.connections[i]
-                    current_degrees[p1] += count
-                    current_degrees[p2] += count
-            
-            total_deficit = 0
-            
-            for pos, required_degree in self.map.islands:
-                current = current_degrees[pos]
-                if current > required_degree:
-                    return float('inf')  # Invalid state
+        gen = CNFGenerator(self.map.islands, self.map.connections)
+        cnf, conn_vars = gen.generate()
+        clauses = [list(c) for c in cnf.clauses]
+        num_vars = gen.var_counter - 1
+
+        cnf.to_file("Hashi_CNF.cnf")
+
+        def is_clause_satisfied(clause, assignment):
+            for literal in clause:
+                var = abs(literal)
+                val = assignment.get(var, None)
+                if val is not None:
+                    if (literal > 0 and val) or (literal < 0 and not val):
+                        return True
+            return False
+
+        def is_cnf_satisfied(cnf_clauses, assignment):
+            return all(is_clause_satisfied(clause, assignment) for clause in cnf_clauses)
+
+        def has_conflict(cnf_clauses, assignment):
+            """Check if current assignment creates unsolvable conflicts"""
+            for clause in cnf_clauses:
+                satisfied = False
+                has_unassigned = False
                 
-                deficit = required_degree - current
-                total_deficit += deficit
+                for literal in clause:
+                    var = abs(literal)
+                    if var not in assignment:
+                        has_unassigned = True
+                    elif (literal > 0 and assignment[var]) or (literal < 0 and not assignment[var]):
+                        satisfied = True
+                        break
                 
-                # Check if it's impossible to satisfy this island's requirement
-                max_possible = current
-                for i, conn in enumerate(self.map.connections):
-                    if assignment[i] == -1 and pos in conn:
-                        max_possible += 2  # Maximum bridges per connection
-                
-                if max_possible < required_degree:
-                    return float('inf')
+                # If clause is not satisfied and has no unassigned variables = conflict
+                if not satisfied and not has_unassigned:
+                    return True
+            return False
+
+        def heuristic(assignment, total_vars):
+            """Admissible heuristic: number of unassigned variables"""
+            # This is admissible because we need at least 1 step per unassigned variable
+            # This is consistent because h decreases by exactly 1 when we assign a variable
+            return total_vars - len(assignment)
+
+        def get_best_variable(assignment, total_vars):
+            """Choose variable using Most Constraining Variable heuristic"""
+            unassigned = []
+            for var in range(1, total_vars + 1):
+                if var not in assignment:
+                    unassigned.append(var)
             
-            # Primary heuristic: minimum bridges needed
-            bridge_heuristic = (total_deficit + 1) // 2
+            if not unassigned:
+                return None
             
-            # Secondary heuristic: encourage progress (fewer unassigned connections)
-            progress_heuristic = unassigned_connections * 0.1
+            # Count appearances in unsatisfied clauses
+            var_counts = {}
+            for var in unassigned:
+                var_counts[var] = 0
             
-            return bridge_heuristic + progress_heuristic
-        
-        def calculate_connection_priority(assignment):
-            """
-            Smart connection selection: prioritize connections involving constrained islands.
-            """
-            island_constraints = {}
-            for pos, required_degree in self.map.islands:
-                current = sum(assignment[i] for i, conn in enumerate(self.map.connections) 
-                            if assignment[i] > 0 and pos in conn)
-                remaining = required_degree - current
-                max_possible = sum(2 for i, conn in enumerate(self.map.connections) 
-                                if assignment[i] == -1 and pos in conn)
-                
-                # Constraint ratio: how tight the constraint is
-                constraint_ratio = remaining / max(max_possible, 1)
-                island_constraints[pos] = constraint_ratio
+            for clause in clauses:
+                if not is_clause_satisfied(clause, assignment):
+                    for literal in clause:
+                        var = abs(literal)
+                        if var in unassigned:
+                            var_counts[var] += 1
             
-            # Find unassigned connection with highest constraint
-            best_conn = None
-            best_priority = -1
+            # Return variable with highest count
+            best_var = unassigned[0]
+            best_count = var_counts[best_var]
             
-            for i, val in enumerate(assignment):
-                if val == -1:
-                    p1, p2 = self.map.connections[i]
-                    priority = island_constraints.get(p1, 0) + island_constraints.get(p2, 0)
-                    if priority > best_priority:
-                        best_priority = priority
-                        best_conn = i
+            for var in unassigned:
+                if var_counts[var] > best_count:
+                    best_var = var
+                    best_count = var_counts[var]
             
-            return best_conn if best_conn is not None else next(
-                (i for i, val in enumerate(assignment) if val == -1), None
-            )
-        
-        def bridges_cross(conn1, conn2):
-            """Optimized bridge crossing check."""
-            (r1a, c1a), (r1b, c1b) = conn1
-            (r2a, c2a), (r2b, c2b) = conn2
-            
-            # Quick rejection: if connections share an endpoint
-            if (r1a, c1a) in [(r2a, c2a), (r2b, c2b)] or (r1b, c1b) in [(r2a, c2a), (r2b, c2b)]:
-                return False
-            
-            h1, h2 = r1a == r1b, r2a == r2b
-            if h1 == h2:  # Both horizontal or both vertical
-                return False
-            
-            if h1:  # conn1 horizontal, conn2 vertical
-                return (min(c1a, c1b) < c2a < max(c1a, c1b)) and (min(r2a, r2b) < r1a < max(r2a, r2b))
-            else:  # conn1 vertical, conn2 horizontal
-                return (min(r1a, r1b) < r2a < max(r1a, r1b)) and (min(c2a, c2b) < c1a < max(c2a, c2b))
-        
-        def is_valid_partial_assignment(assignment, new_conn_idx, new_bridges):
-            """
-            Optimized validity check - only check new bridge against existing ones.
-            """
-            if new_bridges == 0:
-                return True
-            
-            new_conn = self.map.connections[new_conn_idx]
-            for i, bridges in enumerate(assignment):
-                if i != new_conn_idx and bridges > 0:
-                    if bridges_cross(new_conn, self.map.connections[i]):
-                        return False
-            return True
-        
-        def get_valid_bridge_counts(assignment, conn_idx):
-            """
-            Return valid bridge counts for a connection based on island constraints.
-            """
-            valid_counts = []
-            
-            for bridges in [0, 1, 2]:
-                # Check if this assignment would violate island degree constraints
-                temp_assignment = list(assignment)
-                temp_assignment[conn_idx] = bridges
-                
-                if is_valid_partial_assignment(assignment, conn_idx, bridges):
-                    # Quick degree check
-                    degrees = defaultdict(int)
-                    for i, count in enumerate(temp_assignment):
-                        if count > 0:
-                            conn_p1, conn_p2 = self.map.connections[i]
-                            degrees[conn_p1] += count
-                            degrees[conn_p2] += count
-                    
-                    valid = True
-                    for pos, required in self.map.islands:
-                        if degrees[pos] > required:
-                            valid = False
-                            break
-                    
-                    if valid:
-                        valid_counts.append(bridges)
-            
-            return valid_counts
-        
-        # Initialize search with better state management
-        num_connections = len(self.map.connections)
-        initial_state = tuple([-1] * num_connections)
-        
-        # Use a more sophisticated priority queue entry: (f_score, tie_breaker, g_score, state)
-        open_set = []
-        tie_breaker = 0
-        heapq.heappush(open_set, (calculate_improved_heuristic(initial_state), tie_breaker, 0, initial_state))
-        
-        # Track best g_score for each state to avoid redundant exploration
-        g_scores = {initial_state: 0}
+            return best_var
+
+        def insert_sorted(open_set, node):
+            """Insert node in open set sorted by f = g + h"""
+            f = node[0]
+            i = 0
+            while i < len(open_set) and open_set[i][0] < f:
+                i += 1
+            open_set.insert(i, node)
+
+        # A* search without external libraries
+        initial_assignment = {}
+        h_score = heuristic(initial_assignment, num_vars)
+        open_set = [(h_score, 0, initial_assignment)]  # (f_score, g_score, assignment)
         visited = set()
-        
+        model = None
+
         while open_set:
             if time.time() - start > timeout:
+                print("[timeout] A* failed")
                 return None, time.time() - start, False
-            
-            f_score, _, g_score, current_state = heapq.heappop(open_set)
-            
-            if current_state in visited:
+
+            f_score, g_score, assignment = open_set.pop(0)  # Get best node
+            state_key = frozenset(assignment.items())
+
+            if state_key in visited:
                 continue
-            visited.add(current_state)
-            
-            # Smart connection selection
-            next_conn = calculate_connection_priority(current_state)
-            
-            # Goal test: if no more connections to assign
-            if next_conn is None:
-                assignment = list(current_state)
-                if self.checker.is_valid(assignment):
-                    return self.checker.to_grid(assignment), time.time() - start, True
+            visited.add(state_key)
+
+            # Check for conflicts first
+            if has_conflict(clauses, assignment):
                 continue
+
+            # Check if this is a complete and valid solution
+            if len(assignment) == num_vars:
+                if is_cnf_satisfied(clauses, assignment):
+                    model = assignment
+                    break
+                continue
+
+            # Get next variable to assign
+            var = get_best_variable(assignment, num_vars)
+            if var is None:
+                continue
+
+            # Try both True and False assignments
+            for val in [True, False]:
+                new_assignment = assignment.copy()
+                new_assignment[var] = val
+                
+                new_state_key = frozenset(new_assignment.items())
+                if new_state_key in visited:
+                    continue
+
+                # Skip if this creates a conflict
+                if has_conflict(clauses, new_assignment):
+                    continue
+
+                h = heuristic(new_assignment, num_vars)
+                g = g_score + 1
+                f = g + h
+                
+                insert_sorted(open_set, (f, g, new_assignment))
+
+        if model:
+            bridge_assignment = [0] * len(self.map.connections)
+            for i, (v1, v2) in conn_vars.items():
+                if model.get(v1, False):
+                    bridge_assignment[i] = 1
+                elif model.get(v2, False):
+                    bridge_assignment[i] = 2
             
-            # Get valid bridge counts for this connection
-            valid_bridge_counts = get_valid_bridge_counts(current_state, next_conn)
-            
-            for bridges in valid_bridge_counts:
-                new_state = list(current_state)
-                new_state[next_conn] = bridges
-                new_state_tuple = tuple(new_state)
-                
-                if new_state_tuple in visited:
-                    continue
-                
-                # Improved cost function: actual number of bridges placed
-                new_g_score = g_score + bridges
-                
-                # Skip if we've found a better path to this state
-                if new_state_tuple in g_scores and g_scores[new_state_tuple] <= new_g_score:
-                    continue
-                
-                g_scores[new_state_tuple] = new_g_score
-                
-                h_score = calculate_improved_heuristic(new_state)
-                if h_score == float('inf'):
-                    continue
-                
-                new_f_score = new_g_score + h_score
-                tie_breaker += 1
-                
-                heapq.heappush(open_set, (new_f_score, tie_breaker, new_g_score, new_state_tuple))
-        
+            if self.checker.is_valid(bridge_assignment):
+                return self.checker.to_grid(bridge_assignment), time.time() - start, True
+
         return None, time.time() - start, False
 
     def compare_algorithms(self, verbose=True):
