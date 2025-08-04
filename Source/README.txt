@@ -28,6 +28,7 @@ source .venv/bin/activate
 Install the required packages using pip:
 
 ```bash
+pip install --upgrade pip
 pip install -r Source/requirements.txt
 ```
 
