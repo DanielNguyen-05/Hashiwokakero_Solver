@@ -7,8 +7,11 @@ import time
 import os
 
 def main():
-    grid = load_input("input-16.txt")
-    print("Input Grid:")
+    print ("="*60)
+    print("HASHIWOKAKERO SOLVER")
+    print ("="*60)
+    problem = input("Input the problem number (e.g., 03): ").strip()
+    grid = load_input(f"input-{problem}.txt")
     for row in grid:
         print(row)
     
@@ -16,16 +19,10 @@ def main():
     print("SOLVING WITH DIFFERENT METHODS")
     print("="*60)
     
-    # Create single solver instance for comparison
     solver = HashiwokakeroSolver(grid)
-    
-    # Use the built-in comparison method
     results = solver.compare_algorithms(verbose=True)
-    
-    # Print performance summary
     solver.print_performance_summary(results)
     
-    # Save outputs for successful solutions
     print("\n" + "="*60)
     print("SAVING OUTPUTS")
     print("="*60)
@@ -41,7 +38,7 @@ def main():
         if result['success'] and result['grid'] is not None:
             method_code = method_mapping.get(method_name, method_name.replace(' ', ''))
             try:
-                upload_output(result['grid'], "output-16.txt", method=method_code)
+                upload_output(result['grid'], f"output-{problem}.txt", method=method_code)
                 print(f"✓ Saved output for {method_name} ({method_code})")
             except Exception as e:
                 print(f"✗ Failed to save output for {method_name}: {e}")

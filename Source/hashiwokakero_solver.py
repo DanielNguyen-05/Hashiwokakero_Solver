@@ -13,33 +13,28 @@ from collections import defaultdict
 
 class HashiwokakeroSolver:
     def __init__(self, grid):
-        self.map = IslandMap(grid) # The map
-        self.checker = SolutionChecker(self.map.islands, self.map.connections, self.map.grid.shape) # Solution checker
+        self.map = IslandMap(grid) 
+        self.checker = SolutionChecker(self.map.islands, self.map.connections, self.map.grid.shape) 
 
     def _get_memory_usage(self):
         """Get current memory usage in MB"""
         process = psutil.Process(os.getpid())
-        return process.memory_info().rss / 1024 / 1024  # Convert to MB
+        return process.memory_info().rss / 1024 / 1024  
 
     def _track_memory(func):
         """Decorator to track memory usage for solving methods"""
         def wrapper(self, *args, **kwargs):
-            # Start memory tracking
             tracemalloc.start()
             initial_memory = self._get_memory_usage()
             
-            # Execute the function
             result = func(self, *args, **kwargs)
             
-            # Get memory statistics
             current, peak = tracemalloc.get_traced_memory()
             final_memory = self._get_memory_usage()
             tracemalloc.stop()
             
-            # Unpack original result
             if len(result) == 3:
                 grid, elapsed_time, success = result
-                # Return extended result with memory info
                 memory_info = {
                     'peak_memory_mb': peak / 1024 / 1024,
                     'current_memory_mb': current / 1024 / 1024,
@@ -92,16 +87,13 @@ class HashiwokakeroSolver:
 
         cnf.to_file("Hashi_CNF.cnf")
 
-        # Assign false or true for each logical variables
         for bits in product([False, True], repeat=num_vars):
-            # Check whether it is time exceed or not
             if time.time() - start > timeout:
                 print("[timeout] Brute-force failed")
                 return None, time.time() - start, False
 
             assignment_dict = {i + 1: bits[i] for i in range(num_vars)}
 
-            # Check whether it satisfies CNF or not
             if all(any((lit > 0 and assignment_dict[lit]) or (lit < 0 and not assignment_dict[-lit]) for lit in clause) for clause in cnf):
                 bridge_assignment = [0] * len(self.map.connections)
                 for i, (v1, v2) in conn_vars.items():
@@ -127,13 +119,11 @@ class HashiwokakeroSolver:
 
         cnf.to_file("Hashi_CNF.cnf")
 
-        # Function for unit propagate
         def unit_propagate(clauses, assignment):
             updated = True
             while updated:
                 updated = False
                 for clause in clauses:
-                    # Clause is already satisfied
                     if any(
                         (lit > 0 and assignment.get(abs(lit)) is True) or
                         (lit < 0 and assignment.get(abs(lit)) is False)
@@ -142,11 +132,9 @@ class HashiwokakeroSolver:
                         continue
 
                     unassigned_lits = [lit for lit in clause if abs(lit) not in assignment]
-                    # Conflict when there is no literal left
                     if not unassigned_lits:
                         return None, None
 
-                    # Unit clause
                     if len(unassigned_lits) == 1:
                         unit = unassigned_lits[0]
                         var = abs(unit)
@@ -157,7 +145,6 @@ class HashiwokakeroSolver:
                         updated = True
                         break  
 
-            # Simplify for new assignment
             simplified_clauses = []
             for clause in clauses:
                 if any(
@@ -181,14 +168,12 @@ class HashiwokakeroSolver:
             if new_clauses is None:
                 return None
 
-            # Check whether all clauses are satisfied under the current assignment
             if all(any((lit > 0 and new_assignment.get(abs(lit), False)) or
                     (lit < 0 and not new_assignment.get(abs(lit), False))
                     for lit in clause)
                 for clause in new_clauses):
                 return new_assignment
 
-            # Get unassigned variables
             all_vars = set(abs(lit) for clause in new_clauses for lit in clause)
             unassigned = list(all_vars - set(new_assignment.keys()))
             if not unassigned:
@@ -256,7 +241,6 @@ class HashiwokakeroSolver:
                         satisfied = True
                         break
                 
-                # If clause is not satisfied and has no unassigned variables = conflict
                 if not satisfied and not has_unassigned:
                     return True
             return False
@@ -277,7 +261,6 @@ class HashiwokakeroSolver:
             if not unassigned:
                 return None
             
-            # Count appearances in unsatisfied clauses
             var_counts = {}
             for var in unassigned:
                 var_counts[var] = 0
@@ -289,7 +272,6 @@ class HashiwokakeroSolver:
                         if var in unassigned:
                             var_counts[var] += 1
             
-            # Return variable with highest count
             best_var = unassigned[0]
             best_count = var_counts[best_var]
             
@@ -320,30 +302,26 @@ class HashiwokakeroSolver:
                 print("[timeout] A* failed")
                 return None, time.time() - start, False
 
-            f_score, g_score, assignment = open_set.pop(0)  # Get best node
+            f_score, g_score, assignment = open_set.pop(0) 
             state_key = frozenset(assignment.items())
 
             if state_key in visited:
                 continue
             visited.add(state_key)
 
-            # Check for conflicts first
             if has_conflict(clauses, assignment):
                 continue
 
-            # Check if this is a complete and valid solution
             if len(assignment) == num_vars:
                 if is_cnf_satisfied(clauses, assignment):
                     model = assignment
                     break
                 continue
 
-            # Get next variable to assign
             var = get_best_variable(assignment, num_vars)
             if var is None:
                 continue
 
-            # Try both True and False assignments
             for val in [True, False]:
                 new_assignment = assignment.copy()
                 new_assignment[var] = val
@@ -352,7 +330,6 @@ class HashiwokakeroSolver:
                 if new_state_key in visited:
                     continue
 
-                # Skip if this creates a conflict
                 if has_conflict(clauses, new_assignment):
                     continue
 
@@ -453,7 +430,6 @@ class HashiwokakeroSolver:
             
             print(f"{name:<20} {status:<10} {time_str:<12} {memory_str:<18} {delta_str:<15}")
         
-        # Find best performers
         successful_results = {k: v for k, v in results.items() if v['success']}
         
         if successful_results:
