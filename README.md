@@ -25,10 +25,21 @@ source .venv/bin/activate
 ```
 
 ### Dependencies
+
+Upgrade the pip:
+```bash
+pip install --upgrade pip
+```
+
 Install the required packages using pip:
 
 ```bash
 pip install -r Source/requirements.txt
+```
+
+Run the program:
+```bash
+python3 Source/main.py
 ```
 
 ### Required Files
